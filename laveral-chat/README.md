@@ -7,6 +7,8 @@ java,php,go,nodejs 等各种语言的客户端。
 
 两者结合可快速开发出性能强劲的分布式 `websocket` 长连接服务，非常适合开发 IM、聊天室、客服系统、直播弹幕、页游等需求。
 
+> Star https://github.com/connmix/examples 获取最新版本的范例
+
 ## 安装
 
 1. 安装 `CONNMIX` 引擎
