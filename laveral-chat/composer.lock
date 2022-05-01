@@ -78,12 +78,12 @@
             "source": {
                 "type": "git",
                 "url": "https://github.com/connmix/connmix-php.git",
-                "reference": "7faaa0140497993b14b825c01774fd60ab022ce5"
+                "reference": "dfad999aad7d2c784b05e4d04ae927ce41040f8b"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/connmix/connmix-php/zipball/7faaa0140497993b14b825c01774fd60ab022ce5",
-                "reference": "7faaa0140497993b14b825c01774fd60ab022ce5",
+                "url": "https://api.github.com/repos/connmix/connmix-php/zipball/dfad999aad7d2c784b05e4d04ae927ce41040f8b",
+                "reference": "dfad999aad7d2c784b05e4d04ae927ce41040f8b",
                 "shasum": "",
                 "mirrors": [
                     {
@@ -125,7 +125,7 @@
                 "issues": "https://github.com/connmix/connmix-php/issues",
                 "source": "https://github.com/connmix/connmix-php/tree/v1.0.3"
             },
-            "time": "2022-05-01T08:42:38+00:00"
+            "time": "2022-05-01T13:48:09+00:00"
         },
         {
             "name": "dflydev/dot-access-data",

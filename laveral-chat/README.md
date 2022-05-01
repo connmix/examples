@@ -55,7 +55,7 @@ composer require connmix/connmix
 
 我们需要做登录，因此需要一个 `users` 表来处理鉴权，这里只是为了演示因此表设计特意简化。
 
-- 文件路径：`laveral-chat/users.sql`
+- 文件路径：[users.sql](laveral-chat/users.sql)
 
 ```sql
 CREATE TABLE `users`
@@ -75,7 +75,7 @@ CREATE TABLE `users`
 
 用户登录需要在 lua 协议增加 `conn:wait_context_value` 来完成，我们修改 `entry.lua` 如下：
 
-- 文件路径：`laveral-chat/entry.lua`
+- 文件路径：[entry.lua](laveral-chat/entry.lua)
 - `protocol_input` 修改绑定的 url 路径
 - `on_message` 增加阻塞等待上下文
 
@@ -120,12 +120,14 @@ function on_message(data, conn)
         return
     end
 
-    local s, err = mix.json_encode({ frame = data, ctx = conn:context() })
+    local auth_key = "uid"
+
+    local s, err = mix.json_encode({ frame = data, uid = conn:context()[auth_key] })
     if err then
        mix_log(mix_DEBUG, "json_encode error: " .. err)
        return
     end
-    
+
     local tb, err = mix.json_decode(data["data"])
     if err then
        mix_log(mix_DEBUG, "json_decode error: " .. err)
@@ -140,7 +142,7 @@ function on_message(data, conn)
 
     local op = tb["op"]
     if op == "auth" then
-       conn:wait_context_value("user_id")
+       conn:wait_context_value(auth_key)
     end
 end
 ```
@@ -153,7 +155,7 @@ end
 php artisan make:command Chat
 ```
 
-- 文件路径：`laveral-chat/app/Console/Commands/Chat.php`
+- 文件路径：[Console/Commands/Chat.php](laveral-chat/app/Console/Commands/Chat.php)
 
 我们使用 `connmix-php` 客户端来处理内存队列的消费。
 
@@ -163,6 +165,8 @@ php artisan make:command Chat
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
+use Nette\Utils\ArrayHash;
+use phpDocumentor\Reflection\DocBlock\Tags\BaseTag;
 
 class Chat extends Command
 {
@@ -204,21 +208,32 @@ class Chat extends Command
                     // 解析
                     $json = json_decode($data['frame']['data'], true);
                     if (empty($json)) {
+                        $node->meshSend($clientID, '{"error":"Json format error"}');
                         return;
                     }
-                    $args = $data['args'];
-                    $ctx = $data['ctx'];
+                    $op = $json['op'] ?? '';
+                    $args = $json['args'] ?? [];
+                    $uid = $data['uid'] ?? 0;
 
                     // 业务逻辑
-                    switch ($json['op']) {
+                    switch ($op) {
                         case 'auth':
-                            $this->auth($node, $clientID, $args, $ctx);
+                            $this->auth($node, $clientID, $args);
                             break;
                         case 'subscribe':
-                            $this->subscribe($node, $clientID, $args, $ctx);
+                            $this->subscribe($node, $clientID, $args, $uid);
                             break;
                         case 'unsubscribe':
-                            $this->unsubscribe($node, $clientID, $args, $ctx);
+                            $this->unsubscribe($node, $clientID, $args, $uid);
+                            break;
+                        case 'sendtoroom':
+                            $this->sendToRoom($node, $clientID, $args, $uid);
+                            break;
+                        case 'sendtouser':
+                            $this->sendToUser($node, $clientID, $args, $uid);
+                            break;
+                        case 'sendbroadcast':
+                            $this->sendBroadcast($node, $clientID, $args, $uid);
                             break;
                         default:
                             return;
@@ -233,11 +248,12 @@ class Chat extends Command
                     $error = $message->error();
                     break;
                 default:
-                    $json = $message->payload();
+                    $payload = $message->payload();
             }
         };
         $onError = function (\Throwable $e) {
             // handle error
+            print 'ERROR: ' . $e->getMessage() . PHP_EOL;
         };
         $client->do($onConnect, $onReceive, $onError);
         return 0;
@@ -247,63 +263,186 @@ class Chat extends Command
      * @param \Connmix\AsyncNodeInterface $node
      * @param int $clientID
      * @param array $args
-     * @param array $ctx
      * @return void
      */
-    protected function auth(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, array $ctx)
+    protected function auth(\Connmix\AsyncNodeInterface $node, int $clientID, array $args)
     {
         list($name, $password) = $args;
         $row = \App\Models\User::query()->where('name', '=', $name)->where('password', '=', $password)->first();
         if (empty($row)) {
             // 验证失败，设置一个特殊值解除 lua 代码阻塞
             $node->setContextValue($clientID, 'user_id', 0);
-            $node->meshSend($clientID, '{"error":"Invalid name or password"}');
+            $node->meshSend($clientID, '{"op":"auth","error":"Invalid name or password"}');
             return;
         }
 
         // 设置上下文解除 lua 代码阻塞
-        $node->setContextValue($clientID, 'user_id', $row['id']);
+        $node->setContextValue($clientID, 'uid', $row['id']);
+        $node->meshSend($clientID, '{"op":"auth","success":true}');
     }
+
 
     /**
      * @param \Connmix\AsyncNodeInterface $node
      * @param int $clientID
      * @param array $args
-     * @param array $ctx
+     * @param int $uid
      * @return void
      */
-    protected function subscribe(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, array $ctx)
+    protected function subscribe(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid)
     {
         // 登录判断
-        if (empty($ctx['user_id'])) {
-            $node->meshSend($clientID, '{"error":"No access"}');
+        if (empty($uid)) {
+            $node->meshSend($clientID, '{"op":"subscribe","error":"No access"}');
             return;
         }
 
+        // 此处省略业务权限效验
+        // ...
+
         $node->subscribe($clientID, ...$args);
+        $node->meshSend($clientID, '{"op":"subscribe","success":true}');
     }
 
     /**
      * @param \Connmix\AsyncNodeInterface $node
      * @param int $clientID
      * @param array $args
-     * @param array $ctx
+     * @param int $uid
      * @return void
      */
-    protected function unsubscribe(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, array $ctx)
+    protected function unsubscribe(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid)
     {
         // 登录判断
-        if (empty($ctx['user_id'])) {
-            $node->meshSend($clientID, '{"error":"No access"}');
+        if (empty($uid)) {
+            $node->meshSend($clientID, '{"op":"unsubscribe","error":"No access"}');
             return;
         }
 
         $node->unsubscribe($clientID, ...$args);
+        $node->meshSend($clientID, '{"op":"unsubscribe","success":true}');
+    }
+
+    /**
+     * @param \Connmix\AsyncNodeInterface $node
+     * @param int $clientID
+     * @param array $args
+     * @param int $uid
+     * @return void
+     */
+    protected function sendToRoom(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid)
+    {
+        // 登录判断
+        if (empty($uid)) {
+            $node->meshSend($clientID, '{"op":"sendtoroom","error":"No access"}');
+            return;
+        }
+
+        // 此处省略业务权限效验
+        // ...
+
+        list($channel, $message) = $args;
+        $message = sprintf('uid:%d,message:%s', $uid, $message);
+        $node->meshPublish($channel, sprintf('{"event":"subscribe","channel":"%s","data":"%s"}', $channel, $message));
+        $node->meshSend($clientID, '{"op":"sendtoroom","success":true}');
+    }
+
+    /**
+     * @param \Connmix\AsyncNodeInterface $node
+     * @param int $clientID
+     * @param array $args
+     * @param int $uid
+     * @return void
+     */
+    protected function sendToUser(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid)
+    {
+        // 登录判断
+        if (empty($uid)) {
+            $node->meshSend($clientID, '{"op":"sendtouser","error":"No access"}');
+            return;
+        }
+
+        // 此处省略业务权限效验
+        // ...
+
+        list($channel, $message) = $args;
+        $message = sprintf('uid:%d,message:%s', $uid, $message);
+        $node->meshPublish($channel, sprintf('{"event":"subscribe","channel":"%s","data":"%s"}', $channel, $message));
+        $node->meshSend($clientID, '{"op":"sendtouser","success":true}');
+    }
+
+    /**
+     * @param \Connmix\AsyncNodeInterface $node
+     * @param int $clientID
+     * @param array $args
+     * @param int $uid
+     * @return void
+     */
+    protected function sendBroadcast(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid)
+    {
+        // 登录判断
+        if (empty($uid)) {
+            $node->meshSend($clientID, '{"op":"sendbroadcast","error":"No access"}');
+            return;
+        }
+
+        // 此处省略业务权限效验
+        // ...
+
+        $channel = 'broadcast';
+        list($message) = $args;
+        $message = sprintf('uid:%d,message:%s', $uid, $message);
+        $node->meshPublish($channel, sprintf('{"event":"subscribe","channel":"%s","data":"%s"}', $channel, $message));
+        $node->meshSend($clientID, '{"op":"sendbroadcast","success":true}');
     }
 }
 ```
 
 ## 调试
 
+`WebSocket Client 1`:
 
+登录
+
+```json
+send: {"op":"auth","args":["user1","123456"]}
+receive: {"op":"auth","success":true}
+```
+
+加入房间
+
+```json
+send: {"op":"subscribe","args":["room_101"]}
+receive: {"op":"subscribe","success":true}
+```
+
+发送消息
+
+```json
+send: {"op":"sendtoroom","args":["room_101","hello,world!"]}
+receive: {"event":"subscribe","channel":"room_101","data":"uid:1,message:hello,world!"}
+receive: {"op":"sendtoroom","success":true}
+```
+
+`WebSocket Client 2`:
+
+登录
+
+```
+send: {"op":"auth","args":["user2","123456"]}
+receive: {"op":"auth","success":true}
+```
+
+加入房间
+
+```json
+send: {"op":"subscribe","args":["room_101"]}
+receive: {"op":"subscribe","success":true}
+```
+
+接收消息
+
+```json
+receive: {"event":"subscribe","channel":"room_101","data":"uid:1,message:hello,world!"}
+```
 
