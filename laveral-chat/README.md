@@ -1,13 +1,13 @@
 # Laveral + connmix 开发聊天室
 
+> Star https://github.com/connmix/examples 获取最新版本的范例
+
 [connmix](https://connmix.com) 是一个基于 go + lua 开发面向消息编程的分布式长连接引擎，可用于互联网、即时通讯、APP开发、网络游戏、硬件通讯、智能家居、物联网等领域的开发，支持
 java,php,go,nodejs 等各种语言的客户端。
 
 [laveral](https://laravel.com) 是 PHP 业界公认的最优雅的传统框架。
 
 两者结合可快速开发出性能强劲的分布式 `websocket` 长连接服务，非常适合开发 IM、聊天室、客服系统、直播弹幕、页游等需求。
-
-> Star https://github.com/connmix/examples 获取最新版本的范例
 
 ## 安装
 
