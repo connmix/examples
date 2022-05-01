@@ -49,7 +49,7 @@ composer require connmix/connmix
 | 发送消息到用户 | {"op":"sendtouser","args":["user_10001","hello,world!"]}           |                  | 
 | 发送广播    | {"op":"sendbroadcast","args":["hello,world!"]}                     |                  | 
 | 成功      | {"op":"***","success":true}                                        |     |
-| 错误      | {"op":"***","error":"***"}                                         |                  |
+| 错误      | {"op":"\*\*\*","error":"***"}                                        |                  |
 
 ## 数据库设计
 
