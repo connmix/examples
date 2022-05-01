@@ -400,23 +400,39 @@ class Chat extends Command
 
 ## 调试
 
+### 启动服务
+
+- 启动 `connmix` 引擎
+
+```
+% bin/connmix dev -f conf/connmix.yaml 
+```
+
+- 启动 `laveral` 命令行
+
+```
+% php artisan command:chat
+```
+
 ### WebSocket Client 1
 
-登录
+连接：`ws://127.0.0.1:6790/chat`
+
+- 登录
 
 ```
 send: {"op":"auth","args":["user1","123456"]}
 receive: {"op":"auth","success":true}
 ```
 
-加入房间
+- 加入房间
 
 ```
 send: {"op":"subscribe","args":["room_101"]}
 receive: {"op":"subscribe","success":true}
 ```
 
-发送消息
+- 发送消息
 
 ```
 send: {"op":"sendtoroom","args":["room_101","hello,world!"]}
@@ -426,21 +442,23 @@ receive: {"op":"sendtoroom","success":true}
 
 ### WebSocket Client 2
 
-登录
+连接：`ws://127.0.0.1:6790/chat`
+
+- 登录
 
 ```
 send: {"op":"auth","args":["user2","123456"]}
 receive: {"op":"auth","success":true}
 ```
 
-加入房间
+- 加入房间
 
 ```
 send: {"op":"subscribe","args":["room_101"]}
 receive: {"op":"subscribe","success":true}
 ```
 
-接收消息
+- 接收消息
 
 ```
 receive: {"event":"subscribe","channel":"room_101","data":"uid:1,message:hello,world!"}
