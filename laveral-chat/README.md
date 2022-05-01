@@ -55,7 +55,7 @@ composer require connmix/connmix
 
 我们需要做登录，因此需要一个 `users` 表来处理鉴权，这里只是为了演示因此表设计特意简化。
 
-- 文件路径：[users.sql](laveral-chat/users.sql)
+- 文件路径：[users.sql](users.sql)
 
 ```sql
 CREATE TABLE `users`
@@ -75,7 +75,7 @@ CREATE TABLE `users`
 
 用户登录需要在 lua 协议增加 `conn:wait_context_value` 来完成，我们修改 `entry.lua` 如下：
 
-- 文件路径：[entry.lua](laveral-chat/entry.lua)
+- 文件路径：[entry.lua](entry.lua)
 - `protocol_input` 修改绑定的 url 路径
 - `on_message` 增加阻塞等待上下文
 
@@ -155,7 +155,7 @@ end
 php artisan make:command Chat
 ```
 
-- 文件路径：[Console/Commands/Chat.php](laveral-chat/app/Console/Commands/Chat.php)
+- 文件路径：[Console/Commands/Chat.php](app/Console/Commands/Chat.php)
 
 我们使用 `connmix-php` 客户端来处理内存队列的消费。
 
