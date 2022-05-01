@@ -38,6 +38,7 @@ function on_message(data, conn)
         return
     end
 
+    local auth_op = "auth"
     local auth_key = "uid"
 
     local s, err = mix.json_encode({ frame = data, uid = conn:context()[auth_key] })
@@ -58,8 +59,7 @@ function on_message(data, conn)
        return
     end
 
-    local op = tb["op"]
-    if op == "auth" then
+    if tb["op"] == auth_op then
        conn:wait_context_value(auth_key)
     end
 end
