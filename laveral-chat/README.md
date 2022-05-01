@@ -410,7 +410,7 @@ class Chat extends Command
 % bin/connmix dev -f conf/connmix.yaml 
 ```
 
-- 启动 `laveral` 命令行
+- 启动 `laveral` 命令行 (可以启动多个来增加性能)
 
 ```
 % php artisan command:chat
