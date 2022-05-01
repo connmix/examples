@@ -400,7 +400,7 @@ class Chat extends Command
 
 ## 调试
 
-`WebSocket Client 1`
+### WebSocket Client 1
 
 登录
 
@@ -424,7 +424,7 @@ receive: {"event":"subscribe","channel":"room_101","data":"uid:1,message:hello,w
 receive: {"op":"sendtoroom","success":true}
 ```
 
-`WebSocket Client 2`
+### WebSocket Client 2
 
 登录
 
