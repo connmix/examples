@@ -400,31 +400,31 @@ class Chat extends Command
 
 ## 调试
 
-`WebSocket Client 1`:
+`WebSocket Client 1`
 
 登录
 
-```json
+```
 send: {"op":"auth","args":["user1","123456"]}
 receive: {"op":"auth","success":true}
 ```
 
 加入房间
 
-```json
+```
 send: {"op":"subscribe","args":["room_101"]}
 receive: {"op":"subscribe","success":true}
 ```
 
 发送消息
 
-```json
+```
 send: {"op":"sendtoroom","args":["room_101","hello,world!"]}
 receive: {"event":"subscribe","channel":"room_101","data":"uid:1,message:hello,world!"}
 receive: {"op":"sendtoroom","success":true}
 ```
 
-`WebSocket Client 2`:
+`WebSocket Client 2`
 
 登录
 
@@ -435,14 +435,14 @@ receive: {"op":"auth","success":true}
 
 加入房间
 
-```json
+```
 send: {"op":"subscribe","args":["room_101"]}
 receive: {"op":"subscribe","success":true}
 ```
 
 接收消息
 
-```json
+```
 receive: {"event":"subscribe","channel":"room_101","data":"uid:1,message:hello,world!"}
 ```
 
