@@ -1,4 +1,4 @@
-# Laveral + connmix 开发聊天室
+# Laveral + connmix 开发分布式聊天室
 
 > Star https://github.com/connmix/examples 获取最新版本的范例
 
