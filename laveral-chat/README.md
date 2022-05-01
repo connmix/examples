@@ -43,7 +43,7 @@ composer require connmix/connmix
 | 订阅房间频道  | {"op":"subscribe","args":["room_101"]}                             |                  | 
 | 订阅用户频道  | {"op":"subscribe","args":["user_10001"]}                           |                  | 
 | 订阅广播频道  | {"op":"subscribe","args":["broadcast"]}                            |                  | 
-| 取消订阅频道  | {"op":"subscribe","args":["room_101"]}                             |                  | 
+| 取消订阅频道  | {"op":"unsubscribe","args":["room_101"]}                           |                  | 
 | 接收房间消息  | {"event":"subscribe","channel":"room_101","data":"hello,world!"}   |                  |
 | 接收用户消息  | {"event":"subscribe","channel":"user_10001","data":"hello,world!"} |                  |
 | 接收广播消息  | {"event":"subscribe","channel":"broadcast","data":"hello,world!"}  |                  |
@@ -51,7 +51,7 @@ composer require connmix/connmix
 | 发送消息到用户 | {"op":"sendtouser","args":["user_10001","hello,world!"]}           |                  | 
 | 发送广播    | {"op":"sendbroadcast","args":["hello,world!"]}                     |                  | 
 | 成功      | {"op":"***","success":true}                                        |     |
-| 错误      | {"op":"\*\*\*","error":"***"}                                        |                  |
+| 错误      | {"op":"\*\*\*","error":"***"}                                      |                  |
 
 ## 数据库设计
 
