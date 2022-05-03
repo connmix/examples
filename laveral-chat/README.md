@@ -5,7 +5,7 @@
 [connmix](https://connmix.com) 是一个基于 go + lua 开发面向消息编程的分布式长连接引擎，可用于互联网、即时通讯、APP开发、网络游戏、硬件通讯、智能家居、物联网等领域的开发，支持
 java,php,go,nodejs 等各种语言的客户端。
 
-[laveral](https://laravel.com) 是 PHP 业界公认的最优雅的传统框架。
+[laveral](https://laravel.com) 是 PHP 业界公认最优雅的传统框架，当然你也可以选择 thinkphp 等其他框架。
 
 两者结合可快速开发出性能强劲的分布式 `websocket` 长连接服务，非常适合开发 IM、聊天室、客服系统、直播弹幕、页游等需求。
 
@@ -466,3 +466,6 @@ receive: {"op":"subscribe","success":true}
 receive: {"event":"subscribe","channel":"room_101","data":"uid:1,message:hello,world!"}
 ```
 
+## 结语
+
+基于 `connmix` 客户端我们只需很少的代码就可以快速打造一个分布式长连接服务。
