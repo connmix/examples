@@ -37,21 +37,21 @@ composer require connmix/connmix
 
 作为一个聊天室，在动手之前我们需要先设计 WebSocket API 接口，我们采用最广泛的 `json` 格式来传递数据，交互采用经典的 `pubsub` 模式。
 
-| 功能      | 格式                                                                 | 备注               |
-|---------|--------------------------------------------------------------------|------------------|
-| 用户登录    | {"op":"auth","args":["name","pwd"]}                                |                  |
-| 订阅房间频道  | {"op":"subscribe","args":["room_101"]}                             |                  | 
-| 订阅用户频道  | {"op":"subscribe","args":["user_10001"]}                           |                  | 
-| 订阅广播频道  | {"op":"subscribe","args":["broadcast"]}                            |                  | 
-| 取消订阅频道  | {"op":"unsubscribe","args":["room_101"]}                           |                  | 
-| 接收房间消息  | {"event":"subscribe","channel":"room_101","data":"hello,world!"}   |                  |
-| 接收用户消息  | {"event":"subscribe","channel":"user_10001","data":"hello,world!"} |                  |
-| 接收广播消息  | {"event":"subscribe","channel":"broadcast","data":"hello,world!"}  |                  |
-| 发送消息到房间 | {"op":"sendtoroom","args":["room_101","hello,world!"]}             |                  | 
-| 发送消息到用户 | {"op":"sendtouser","args":["user_10001","hello,world!"]}           |                  | 
-| 发送广播    | {"op":"sendbroadcast","args":["hello,world!"]}                     |                  | 
-| 成功      | {"op":"***","success":true}                                        |     |
-| 错误      | {"op":"\*\*\*","error":"***"}                                      |                  |
+| 功能      | 格式                                                                 |
+|---------|--------------------------------------------------------------------|
+| 用户登录    | {"op":"auth","args":["name","pwd"]}                                |
+| 订阅房间频道  | {"op":"subscribe","args":["room_101"]}                             | 
+| 订阅用户频道  | {"op":"subscribe","args":["user_10001"]}                           | 
+| 订阅广播频道  | {"op":"subscribe","args":["broadcast"]}                            | 
+| 取消订阅频道  | {"op":"unsubscribe","args":["room_101"]}                           | 
+| 接收房间消息  | {"event":"subscribe","channel":"room_101","data":"hello,world!"}   |
+| 接收用户消息  | {"event":"subscribe","channel":"user_10001","data":"hello,world!"} |
+| 接收广播消息  | {"event":"subscribe","channel":"broadcast","data":"hello,world!"}  |
+| 发送消息到房间 | {"op":"sendtoroom","args":["room_101","hello,world!"]}             | 
+| 发送消息到用户 | {"op":"sendtouser","args":["user_10001","hello,world!"]}           | 
+| 发送广播    | {"op":"sendbroadcast","args":["hello,world!"]}                     | 
+| 成功      | {"op":"***","success":true}                                        |
+| 错误      | {"op":"\*\*\*","error":"***"}                                      |
 
 ## 数据库设计
 
