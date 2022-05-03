@@ -1,6 +1,6 @@
 # Laveral + connmix 开发分布式 WebSocket 聊天室
 
-> Star https://github.com/connmix/examples 获取最新版本的范例
+> `Star` https://github.com/connmix/examples 获取最新版本的范例
 
 [connmix](https://connmix.com) 是一个基于 go + lua 开发面向消息编程的分布式长连接引擎，可用于互联网、即时通讯、APP开发、网络游戏、硬件通讯、智能家居、物联网等领域的开发，支持
 java,php,go,nodejs 等各种语言的客户端。
