@@ -18,13 +18,13 @@ java,php,go,nodejs 等各种语言的客户端。
 2. 安装最新版本的 `Laravel` 框架
 
 ```
-composer create-project laravel/laravel Laravel-chat
+composer create-project laravel/laravel laravel-chat
 ```
 
 3. 然后安装 [connmix-php](https://packagist.org/packages/connmix/connmix) 客户端
 
 ```
-cd Laravel-chat
+cd laravel-chat
 composer require connmix/connmix
 ```
 
