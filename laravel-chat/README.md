@@ -1,11 +1,11 @@
-# Laveral + connmix 开发分布式 WebSocket 聊天室
+# Laravel + connmix 开发分布式 WebSocket 聊天室
 
 > `Star` https://github.com/connmix/examples 获取最新版本的范例
 
 [connmix](https://connmix.com) 是一个基于 go + lua 开发面向消息编程的分布式长连接引擎，可用于互联网、即时通讯、APP开发、网络游戏、硬件通讯、智能家居、物联网等领域的开发，支持
 java,php,go,nodejs 等各种语言的客户端。
 
-[laveral](https://laravel.com) 是 PHP 业界公认最优雅的传统框架，当然你也可以选择 thinkphp 等其他框架。
+[Laravel](https://laravel.com) 是 PHP 业界公认最优雅的传统框架，当然你也可以选择 thinkphp 等其他框架。
 
 两者结合可快速开发出性能强劲的分布式 `websocket` 长连接服务，非常适合开发 IM、聊天室、客服系统、直播弹幕、页游等需求。
 
@@ -15,23 +15,23 @@ java,php,go,nodejs 等各种语言的客户端。
 
 - https://connmix.com/docs/1.0/#/zh-cn/install-engine
 
-2. 安装最新版本的 `Laveral` 框架
+2. 安装最新版本的 `Laravel` 框架
 
 ```
-composer create-project laravel/laravel laveral-chat
+composer create-project laravel/laravel laravel-chat
 ```
 
 3. 然后安装 [connmix-php](https://packagist.org/packages/connmix/connmix) 客户端
 
 ```
-cd laveral-chat
+cd laravel-chat
 composer require connmix/connmix
 ```
 
 ## 解决方案
 
 - 在命令行中使用 `connmix` 客户端消费内存队列 (前端发送的 WebSocket 消息)。
-- 我们选择 Laveral 的命令行模式，也就是 `console` 来编写业务逻辑，这样就可以使用 Laveral 的 DB、Redis 等各种生态库。
+- 我们选择 Laravel 的命令行模式，也就是 `console` 来编写业务逻辑，这样就可以使用 Laravel 的 DB、Redis 等各种生态库。
 
 ## API 设计
 
@@ -410,7 +410,7 @@ class Chat extends Command
 % bin/connmix dev -f conf/connmix.yaml 
 ```
 
-- 启动 `laveral` 命令行 (可以启动多个来增加性能)
+- 启动 `Laravel` 命令行 (可以启动多个来增加性能)
 
 ```
 % php artisan command:chat
