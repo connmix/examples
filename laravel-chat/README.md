@@ -11,9 +11,7 @@ java,php,go,nodejs 等各种语言的客户端。
 
 ## 安装
 
-1. 安装 `CONNMIX` 引擎
-
-- https://connmix.com/docs/1.0/#/zh-cn/install-engine
+1. 安装 `CONNMIX` 引擎：https://connmix.com/docs/1.0/#/zh-cn/install-engine
 
 2. 安装最新版本的 `Laravel` 框架
 
