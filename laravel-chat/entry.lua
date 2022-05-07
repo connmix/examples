@@ -2,12 +2,14 @@ require("prettyprint")
 local mix_log = mix.log
 local mix_DEBUG = mix.DEBUG
 local websocket = require("protocols/websocket")
-local chat_queue = "chat"
-local conn_queue = "conn"
+local queue_chat = "chat"
+local queue_conn = "conn"
+local auth_op = "auth"
+local auth_key = "uid"
 
 function init()
-    mix.queue.new(chat_queue, 100)
-    mix.queue.new(conn_queue, 100)
+    mix.queue.new(queue_chat, 100)
+    mix.queue.new(queue_conn, 100)
 end
 
 function on_connect(conn)
@@ -16,7 +18,7 @@ function on_connect(conn)
        mix_log(mix_DEBUG, "json_encode error: " .. err)
        return
     end
-    local n, err = mix.queue.push(conn_queue, s)
+    local n, err = mix.queue.push(queue_conn, s)
     if err then
        mix_log(mix_DEBUG, "queue push error: " .. err)
        return
@@ -30,7 +32,7 @@ function on_close(err, conn)
        mix_log(mix_DEBUG, "json_encode error: " .. err)
        return
     end
-    local n, err = mix.queue.push(conn_queue, s)
+    local n, err = mix.queue.push(queue_conn, s)
     if err then
        mix_log(mix_DEBUG, "queue push error: " .. err)
        return
@@ -60,9 +62,6 @@ function on_message(data, conn)
         return
     end
 
-    local auth_op = "auth"
-    local auth_key = "uid"
-
     local s, err = mix.json_encode({ frame = data, uid = conn:context()[auth_key] })
     if err then
        mix_log(mix_DEBUG, "json_encode error: " .. err)
@@ -75,7 +74,7 @@ function on_message(data, conn)
        return
     end
 
-    local n, err = mix.queue.push(chat_queue, s)
+    local n, err = mix.queue.push(queue_chat, s)
     if err then
        mix_log(mix_DEBUG, "queue push error: " .. err)
        return
