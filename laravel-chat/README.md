@@ -84,17 +84,39 @@ require("prettyprint")
 local mix_log = mix.log
 local mix_DEBUG = mix.DEBUG
 local websocket = require("protocols/websocket")
-local queue_name = "chat"
+local chat_queue = "chat"
+local conn_queue = "conn"
 
 function init()
-    mix.queue.new(queue_name, 100)
+    mix.queue.new(chat_queue, 100)
+    mix.queue.new(conn_queue, 100)
 end
 
 function on_connect(conn)
+    local s, err = mix.json_encode({ event = "connect" })
+    if err then
+       mix_log(mix_DEBUG, "json_encode error: " .. err)
+       return
+    end
+    local n, err = mix.queue.push(conn_queue, s)
+    if err then
+       mix_log(mix_DEBUG, "queue push error: " .. err)
+       return
+    end
 end
 
 function on_close(err, conn)
     --print(err)
+    local s, err = mix.json_encode({ event = "close", uid = conn:context()[auth_key] })
+    if err then
+       mix_log(mix_DEBUG, "json_encode error: " .. err)
+       return
+    end
+    local n, err = mix.queue.push(conn_queue, s)
+    if err then
+       mix_log(mix_DEBUG, "queue push error: " .. err)
+       return
+    end
 end
 
 --buf为一个对象，是一个副本
@@ -135,7 +157,7 @@ function on_message(data, conn)
        return
     end
 
-    local n, err = mix.queue.push(queue_name, s)
+    local n, err = mix.queue.push(chat_queue, s)
     if err then
        mix_log(mix_DEBUG, "queue push error: " .. err)
        return
@@ -164,9 +186,8 @@ php artisan make:command Chat
 
 namespace App\Console\Commands;
 
+use Connmix\MessageInterface;
 use Illuminate\Console\Command;
-use Nette\Utils\ArrayHash;
-use phpDocumentor\Reflection\DocBlock\Tags\BaseTag;
 
 class Chat extends Command
 {
@@ -196,48 +217,13 @@ class Chat extends Command
             ->build();
         $onConnect = function (\Connmix\AsyncNodeInterface $node) {
             // 消费内存队列
-            $node->consume('chat');
+            $node->consume('chat', 'conn');
         };
         $onMessage = function (\Connmix\AsyncNodeInterface $node) {
             $message = $node->message();
             switch ($message->type()) {
                 case "consume":
-                    $clientID = $message->clientID();
-                    $data = $message->data();
-
-                    // 解析
-                    $json = json_decode($data['frame']['data'], true);
-                    if (empty($json)) {
-                        $node->meshSend($clientID, '{"error":"Json format error"}');
-                        return;
-                    }
-                    $op = $json['op'] ?? '';
-                    $args = $json['args'] ?? [];
-                    $uid = $data['uid'] ?? 0;
-
-                    // 业务逻辑
-                    switch ($op) {
-                        case 'auth':
-                            $this->auth($node, $clientID, $args);
-                            break;
-                        case 'subscribe':
-                            $this->subscribe($node, $clientID, $args, $uid);
-                            break;
-                        case 'unsubscribe':
-                            $this->unsubscribe($node, $clientID, $args, $uid);
-                            break;
-                        case 'sendtoroom':
-                            $this->sendToRoom($node, $clientID, $args, $uid);
-                            break;
-                        case 'sendtouser':
-                            $this->sendToUser($node, $clientID, $args, $uid);
-                            break;
-                        case 'sendbroadcast':
-                            $this->sendBroadcast($node, $clientID, $args, $uid);
-                            break;
-                        default:
-                            return;
-                    }
+                    $this->handleConsume($message, $node);
                     break;
                 case "result":
                     $success = $message->success();
@@ -261,12 +247,97 @@ class Chat extends Command
     }
 
     /**
+     * @param MessageInterface $message
+     * @param \Connmix\AsyncNodeInterface $node
+     * @return void
+     */
+    protected function handleConsume(MessageInterface $message, \Connmix\AsyncNodeInterface $node): void
+    {
+        switch ($message->queue()) {
+            case 'chat':
+                $this->handleQueueChat($message, $node);
+                break;
+            case 'conn':
+                $this->handleQueueConn($message, $node);
+                break;
+        }
+    }
+
+    /**
+     * @param MessageInterface $message
+     * @param \Connmix\AsyncNodeInterface $node
+     * @return void
+     */
+    protected function handleQueueChat(MessageInterface $message, \Connmix\AsyncNodeInterface $node): void
+    {
+        $clientID = $message->clientID();
+        $data = $message->data();
+
+        // 解析
+        $json = json_decode($data['frame']['data'], true);
+        if (empty($json)) {
+            $node->meshSend($clientID, '{"error":"Json format error"}');
+            return;
+        }
+        $op = $json['op'] ?? '';
+        $args = $json['args'] ?? [];
+        $uid = $data['uid'] ?? 0;
+
+        // 业务逻辑
+        switch ($op) {
+            case 'auth':
+                $this->auth($node, $clientID, $args);
+                break;
+            case 'subscribe':
+                $this->subscribe($node, $clientID, $args, $uid);
+                break;
+            case 'unsubscribe':
+                $this->unsubscribe($node, $clientID, $args, $uid);
+                break;
+            case 'sendtoroom':
+                $this->sendToRoom($node, $clientID, $args, $uid);
+                break;
+            case 'sendtouser':
+                $this->sendToUser($node, $clientID, $args, $uid);
+                break;
+            case 'sendbroadcast':
+                $this->sendBroadcast($node, $clientID, $args, $uid);
+                break;
+        }
+    }
+
+    /**
+     * @param MessageInterface $message
+     * @param \Connmix\AsyncNodeInterface $node
+     * @return void
+     */
+    protected function handleQueueConn(MessageInterface $message, \Connmix\AsyncNodeInterface $node): void
+    {
+        $clientID = $message->clientID();
+        $data = $message->data();
+
+        // 解析
+        $event = $data['event'] ?? '';
+        $uid = $data['uid'] ?? 0;
+
+        // 业务逻辑
+        switch ($event) {
+            case 'connect':
+                $this->connect($clientID);
+                break;
+            case 'close':
+                $this->close($clientID, $uid);
+                break;
+        }
+    }
+
+    /**
      * @param \Connmix\AsyncNodeInterface $node
      * @param int $clientID
      * @param array $args
      * @return void
      */
-    protected function auth(\Connmix\AsyncNodeInterface $node, int $clientID, array $args)
+    protected function auth(\Connmix\AsyncNodeInterface $node, int $clientID, array $args): void
     {
         list($name, $password) = $args;
         $row = \App\Models\User::query()->where('name', '=', $name)->where('password', '=', $password)->first();
@@ -276,6 +347,11 @@ class Chat extends Command
             $node->meshSend($clientID, '{"op":"auth","error":"Invalid name or password"}');
             return;
         }
+
+        // 开启用户在线状态
+        \App\Models\User::query()->where('id', '=', $row['id'])->update([
+            'online' => 1,
+        ]);
 
         // 设置上下文解除 lua 代码阻塞
         $node->setContextValue($clientID, 'uid', $row['id']);
@@ -290,7 +366,7 @@ class Chat extends Command
      * @param int $uid
      * @return void
      */
-    protected function subscribe(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid)
+    protected function subscribe(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid): void
     {
         // 登录判断
         if (empty($uid)) {
@@ -312,7 +388,7 @@ class Chat extends Command
      * @param int $uid
      * @return void
      */
-    protected function unsubscribe(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid)
+    protected function unsubscribe(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid): void
     {
         // 登录判断
         if (empty($uid)) {
@@ -331,7 +407,7 @@ class Chat extends Command
      * @param int $uid
      * @return void
      */
-    protected function sendToRoom(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid)
+    protected function sendToRoom(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid): void
     {
         // 登录判断
         if (empty($uid)) {
@@ -355,7 +431,7 @@ class Chat extends Command
      * @param int $uid
      * @return void
      */
-    protected function sendToUser(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid)
+    protected function sendToUser(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid): void
     {
         // 登录判断
         if (empty($uid)) {
@@ -379,7 +455,7 @@ class Chat extends Command
      * @param int $uid
      * @return void
      */
-    protected function sendBroadcast(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid)
+    protected function sendBroadcast(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid): void
     {
         // 登录判断
         if (empty($uid)) {
@@ -395,6 +471,34 @@ class Chat extends Command
         $message = sprintf('uid:%d,message:%s', $uid, $message);
         $node->meshPublish($channel, sprintf('{"event":"subscribe","channel":"%s","data":"%s"}', $channel, $message));
         $node->meshSend($clientID, '{"op":"sendbroadcast","success":true}');
+    }
+
+    /**
+     * @param int $clientID
+     * @return void
+     */
+    protected function connect(int $clientID): void
+    {
+        // 使用 redis incr 增加在线人数
+        // ...
+    }
+
+    /**
+     * @param int $clientID
+     * @param int $uid
+     * @return void
+     */
+    protected function close(int $clientID, int $uid): void
+    {
+        // 关闭用户在线状态
+        if (!empty($uid)) {
+            \App\Models\User::query()->where('id', '=', $uid)->update([
+                'online' => 0,
+            ]);
+        }
+
+        // 使用 redis decr 减少在线人数
+        // ...
     }
 }
 ```
