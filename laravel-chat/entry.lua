@@ -62,18 +62,22 @@ function on_message(data, conn)
         return
     end
 
-    local s, err = mix.json_encode({ frame = data, uid = conn:context()[auth_key] })
-    if err then
-       mix_log(mix_DEBUG, "json_encode error: " .. err)
-       return
-    end
-
     local tb, err = mix.json_decode(data["data"])
     if err then
        mix_log(mix_DEBUG, "json_decode error: " .. err)
        return
     end
 
+    local ctx = conn:context()
+    local data = { frame = data, uid = ctx[auth_key] }
+    if tb["op"] == auth_op then
+        data["headers"] = ctx["headers"]
+    end
+    local s, err = mix.json_encode(data)
+    if err then
+       mix_log(mix_DEBUG, "json_encode error: " .. err)
+       return
+    end
     local n, err = mix.queue.push(queue_chat, s)
     if err then
        mix_log(mix_DEBUG, "queue push error: " .. err)

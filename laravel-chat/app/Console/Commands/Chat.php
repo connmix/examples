@@ -88,6 +88,8 @@ class Chat extends Command
     {
         $clientID = $message->clientID();
         $data = $message->data();
+        $uid = $data['uid'] ?? 0;
+        $headers = $data['headers'] ?? [];
 
         // 解析
         $json = json_decode($data['frame']['data'], true);
@@ -97,12 +99,11 @@ class Chat extends Command
         }
         $op = $json['op'] ?? '';
         $args = $json['args'] ?? [];
-        $uid = $data['uid'] ?? 0;
 
         // 业务逻辑
         switch ($op) {
             case 'auth':
-                $this->auth($node, $clientID, $args);
+                $this->auth($node, $clientID, $args, $headers);
                 break;
             case 'subscribe':
                 $this->subscribe($node, $clientID, $args, $uid);
@@ -151,9 +152,10 @@ class Chat extends Command
      * @param \Connmix\AsyncNodeInterface $node
      * @param int $clientID
      * @param array $args
+     * @param array $headers
      * @return void
      */
-    protected function auth(\Connmix\AsyncNodeInterface $node, int $clientID, array $args): void
+    protected function auth(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, array $headers): void
     {
         list($name, $password) = $args;
         $row = \App\Models\User::query()->where('name', '=', $name)->where('password', '=', $password)->first();
