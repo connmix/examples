@@ -58,15 +58,15 @@ composer require connmix/connmix
 - 文件路径：[users.sql](users.sql)
 
 ```sql
-CREATE TABLE `users`
-(
-    `id`       int          NOT NULL AUTO_INCREMENT,
-    `name`     varchar(255) NOT NULL,
-    `email`    varchar(255) NOT NULL,
-    `password` varchar(255) NOT NULL,
-    PRIMARY KEY (`id`),
-    UNIQUE KEY `idx_n` (`name`)
-);
+CREATE TABLE `users` (
+     `id` int NOT NULL AUTO_INCREMENT,
+     `name` varchar(255) NOT NULL,
+     `email` varchar(255) NOT NULL,
+     `password` varchar(255) NOT NULL,
+     `online` tinyint NOT NULL DEFAULT '0',
+     PRIMARY KEY (`id`),
+     UNIQUE KEY `idx_n` (`name`)
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 ```
 
 房间 table 这里暂时不做设计，大家自行扩展。
