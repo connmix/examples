@@ -146,18 +146,22 @@ function on_message(data, conn)
         return
     end
 
-    local s, err = mix.json_encode({ frame = data, uid = conn:context()[auth_key] })
-    if err then
-       mix_log(mix_DEBUG, "json_encode error: " .. err)
-       return
-    end
-
     local tb, err = mix.json_decode(data["data"])
     if err then
        mix_log(mix_DEBUG, "json_decode error: " .. err)
        return
     end
 
+    local ctx = conn:context()
+    local data = { frame = data, uid = ctx[auth_key] }
+    if tb["op"] == auth_op then
+        data["headers"] = ctx["headers"]
+    end
+    local s, err = mix.json_encode(data)
+    if err then
+       mix_log(mix_DEBUG, "json_encode error: " .. err)
+       return
+    end
     local n, err = mix.queue.push(queue_chat, s)
     if err then
        mix_log(mix_DEBUG, "queue push error: " .. err)
@@ -273,6 +277,8 @@ class Chat extends Command
     {
         $clientID = $message->clientID();
         $data = $message->data();
+        $uid = $data['uid'] ?? 0;
+        $headers = $data['headers'] ?? [];
 
         // 解析
         $json = json_decode($data['frame']['data'], true);
@@ -282,12 +288,11 @@ class Chat extends Command
         }
         $op = $json['op'] ?? '';
         $args = $json['args'] ?? [];
-        $uid = $data['uid'] ?? 0;
 
         // 业务逻辑
         switch ($op) {
             case 'auth':
-                $this->auth($node, $clientID, $args);
+                $this->auth($node, $clientID, $args, $headers);
                 break;
             case 'subscribe':
                 $this->subscribe($node, $clientID, $args, $uid);
@@ -336,9 +341,10 @@ class Chat extends Command
      * @param \Connmix\AsyncNodeInterface $node
      * @param int $clientID
      * @param array $args
+     * @param array $headers
      * @return void
      */
-    protected function auth(\Connmix\AsyncNodeInterface $node, int $clientID, array $args): void
+    protected function auth(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, array $headers): void
     {
         list($name, $password) = $args;
         $row = \App\Models\User::query()->where('name', '=', $name)->where('password', '=', $password)->first();
