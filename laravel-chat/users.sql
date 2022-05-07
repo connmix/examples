@@ -11,7 +11,7 @@
  Target Server Version : 80027
  File Encoding         : 65001
 
- Date: 01/05/2022 22:17:12
+ Date: 07/05/2022 11:48:29
 */
 
 SET NAMES utf8mb4;
@@ -26,6 +26,7 @@ CREATE TABLE `users` (
   `name` varchar(255) NOT NULL,
   `email` varchar(255) NOT NULL,
   `password` varchar(255) NOT NULL,
+  `online` tinyint NOT NULL DEFAULT '0',
   PRIMARY KEY (`id`),
   UNIQUE KEY `idx_n` (`name`)
 ) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -34,8 +35,8 @@ CREATE TABLE `users` (
 -- Records of users
 -- ----------------------------
 BEGIN;
-INSERT INTO `users` (`id`, `name`, `email`, `password`) VALUES (1, 'user1', 'foo@foo.com', '123456');
-INSERT INTO `users` (`id`, `name`, `email`, `password`) VALUES (2, 'user2', 'bar@bar.com', '123456');
+INSERT INTO `users` (`id`, `name`, `email`, `password`, `online`) VALUES (1, 'user1', 'foo@foo.com', '123456', 0);
+INSERT INTO `users` (`id`, `name`, `email`, `password`, `online`) VALUES (2, 'user2', 'bar@bar.com', '123456', 0);
 COMMIT;
 
 SET FOREIGN_KEY_CHECKS = 1;

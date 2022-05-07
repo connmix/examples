@@ -198,7 +198,7 @@ class Chat extends Command
             // 消费内存队列
             $node->consume('chat');
         };
-        $onReceive = function (\Connmix\AsyncNodeInterface $node) {
+        $onMessage = function (\Connmix\AsyncNodeInterface $node) {
             $message = $node->message();
             switch ($message->type()) {
                 case "consume":
@@ -255,7 +255,8 @@ class Chat extends Command
             // handle error
             print 'ERROR: ' . $e->getMessage() . PHP_EOL;
         };
-        $client->do($onConnect, $onReceive, $onError);
+        $client->on($onConnect, $onMessage, $onError);
+        $client->run();
         return 0;
     }
 

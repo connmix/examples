@@ -2,17 +2,39 @@ require("prettyprint")
 local mix_log = mix.log
 local mix_DEBUG = mix.DEBUG
 local websocket = require("protocols/websocket")
-local queue_name = "chat"
+local chat_queue = "chat"
+local conn_queue = "conn"
 
 function init()
-    mix.queue.new(queue_name, 100)
+    mix.queue.new(chat_queue, 100)
+    mix.queue.new(conn_queue, 100)
 end
 
 function on_connect(conn)
+    local s, err = mix.json_encode({ event = "connect" })
+    if err then
+       mix_log(mix_DEBUG, "json_encode error: " .. err)
+       return
+    end
+    local n, err = mix.queue.push(conn_queue, s)
+    if err then
+       mix_log(mix_DEBUG, "queue push error: " .. err)
+       return
+    end
 end
 
 function on_close(err, conn)
     --print(err)
+    local s, err = mix.json_encode({ event = "close", uid = conn:context()[auth_key] })
+    if err then
+       mix_log(mix_DEBUG, "json_encode error: " .. err)
+       return
+    end
+    local n, err = mix.queue.push(conn_queue, s)
+    if err then
+       mix_log(mix_DEBUG, "queue push error: " .. err)
+       return
+    end
 end
 
 --buf为一个对象，是一个副本
@@ -53,7 +75,7 @@ function on_message(data, conn)
        return
     end
 
-    local n, err = mix.queue.push(queue_name, s)
+    local n, err = mix.queue.push(chat_queue, s)
     if err then
        mix_log(mix_DEBUG, "queue push error: " .. err)
        return

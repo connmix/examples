@@ -2,9 +2,8 @@
 
 namespace App\Console\Commands;
 
+use Connmix\MessageInterface;
 use Illuminate\Console\Command;
-use Nette\Utils\ArrayHash;
-use phpDocumentor\Reflection\DocBlock\Tags\BaseTag;
 
 class Chat extends Command
 {
@@ -34,48 +33,13 @@ class Chat extends Command
             ->build();
         $onConnect = function (\Connmix\AsyncNodeInterface $node) {
             // 消费内存队列
-            $node->consume('chat');
+            $node->consume('chat', 'conn');
         };
-        $onReceive = function (\Connmix\AsyncNodeInterface $node) {
+        $onMessage = function (\Connmix\AsyncNodeInterface $node) {
             $message = $node->message();
             switch ($message->type()) {
                 case "consume":
-                    $clientID = $message->clientID();
-                    $data = $message->data();
-
-                    // 解析
-                    $json = json_decode($data['frame']['data'], true);
-                    if (empty($json)) {
-                        $node->meshSend($clientID, '{"error":"Json format error"}');
-                        return;
-                    }
-                    $op = $json['op'] ?? '';
-                    $args = $json['args'] ?? [];
-                    $uid = $data['uid'] ?? 0;
-
-                    // 业务逻辑
-                    switch ($op) {
-                        case 'auth':
-                            $this->auth($node, $clientID, $args);
-                            break;
-                        case 'subscribe':
-                            $this->subscribe($node, $clientID, $args, $uid);
-                            break;
-                        case 'unsubscribe':
-                            $this->unsubscribe($node, $clientID, $args, $uid);
-                            break;
-                        case 'sendtoroom':
-                            $this->sendToRoom($node, $clientID, $args, $uid);
-                            break;
-                        case 'sendtouser':
-                            $this->sendToUser($node, $clientID, $args, $uid);
-                            break;
-                        case 'sendbroadcast':
-                            $this->sendBroadcast($node, $clientID, $args, $uid);
-                            break;
-                        default:
-                            return;
-                    }
+                    $this->handleConsume($message, $node);
                     break;
                 case "result":
                     $success = $message->success();
@@ -93,8 +57,94 @@ class Chat extends Command
             // handle error
             print 'ERROR: ' . $e->getMessage() . PHP_EOL;
         };
-        $client->do($onConnect, $onReceive, $onError);
+        $client->on($onConnect, $onMessage, $onError);
+        $client->run();
         return 0;
+    }
+
+    /**
+     * @param MessageInterface $message
+     * @param \Connmix\AsyncNodeInterface $node
+     * @return void
+     */
+    protected function handleConsume(MessageInterface $message, \Connmix\AsyncNodeInterface $node): void
+    {
+        switch ($message->queue()) {
+            case 'chat':
+                $this->handleQueueChat($message, $node);
+                break;
+            case 'conn':
+                $this->handleQueueConn($message, $node);
+                break;
+        }
+    }
+
+    /**
+     * @param MessageInterface $message
+     * @param \Connmix\AsyncNodeInterface $node
+     * @return void
+     */
+    protected function handleQueueChat(MessageInterface $message, \Connmix\AsyncNodeInterface $node): void
+    {
+        $clientID = $message->clientID();
+        $data = $message->data();
+
+        // 解析
+        $json = json_decode($data['frame']['data'], true);
+        if (empty($json)) {
+            $node->meshSend($clientID, '{"error":"Json format error"}');
+            return;
+        }
+        $op = $json['op'] ?? '';
+        $args = $json['args'] ?? [];
+        $uid = $data['uid'] ?? 0;
+
+        // 业务逻辑
+        switch ($op) {
+            case 'auth':
+                $this->auth($node, $clientID, $args);
+                break;
+            case 'subscribe':
+                $this->subscribe($node, $clientID, $args, $uid);
+                break;
+            case 'unsubscribe':
+                $this->unsubscribe($node, $clientID, $args, $uid);
+                break;
+            case 'sendtoroom':
+                $this->sendToRoom($node, $clientID, $args, $uid);
+                break;
+            case 'sendtouser':
+                $this->sendToUser($node, $clientID, $args, $uid);
+                break;
+            case 'sendbroadcast':
+                $this->sendBroadcast($node, $clientID, $args, $uid);
+                break;
+        }
+    }
+
+    /**
+     * @param MessageInterface $message
+     * @param \Connmix\AsyncNodeInterface $node
+     * @return void
+     */
+    protected function handleQueueConn(MessageInterface $message, \Connmix\AsyncNodeInterface $node): void
+    {
+        $clientID = $message->clientID();
+        $data = $message->data();
+
+        // 解析
+        $event = $data['event'] ?? '';
+        $uid = $data['uid'] ?? 0;
+
+        // 业务逻辑
+        switch ($event) {
+            case 'connect':
+                $this->connect($clientID);
+                break;
+            case 'close':
+                $this->close($clientID, $uid);
+                break;
+        }
     }
 
     /**
@@ -103,7 +153,7 @@ class Chat extends Command
      * @param array $args
      * @return void
      */
-    protected function auth(\Connmix\AsyncNodeInterface $node, int $clientID, array $args)
+    protected function auth(\Connmix\AsyncNodeInterface $node, int $clientID, array $args): void
     {
         list($name, $password) = $args;
         $row = \App\Models\User::query()->where('name', '=', $name)->where('password', '=', $password)->first();
@@ -113,6 +163,11 @@ class Chat extends Command
             $node->meshSend($clientID, '{"op":"auth","error":"Invalid name or password"}');
             return;
         }
+
+        // 开启用户在线状态
+        \App\Models\User::query()->where('id', '=', $row['id'])->update([
+            'online' => 1,
+        ]);
 
         // 设置上下文解除 lua 代码阻塞
         $node->setContextValue($clientID, 'uid', $row['id']);
@@ -127,7 +182,7 @@ class Chat extends Command
      * @param int $uid
      * @return void
      */
-    protected function subscribe(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid)
+    protected function subscribe(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid): void
     {
         // 登录判断
         if (empty($uid)) {
@@ -149,7 +204,7 @@ class Chat extends Command
      * @param int $uid
      * @return void
      */
-    protected function unsubscribe(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid)
+    protected function unsubscribe(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid): void
     {
         // 登录判断
         if (empty($uid)) {
@@ -168,7 +223,7 @@ class Chat extends Command
      * @param int $uid
      * @return void
      */
-    protected function sendToRoom(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid)
+    protected function sendToRoom(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid): void
     {
         // 登录判断
         if (empty($uid)) {
@@ -192,7 +247,7 @@ class Chat extends Command
      * @param int $uid
      * @return void
      */
-    protected function sendToUser(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid)
+    protected function sendToUser(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid): void
     {
         // 登录判断
         if (empty($uid)) {
@@ -216,7 +271,7 @@ class Chat extends Command
      * @param int $uid
      * @return void
      */
-    protected function sendBroadcast(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid)
+    protected function sendBroadcast(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid): void
     {
         // 登录判断
         if (empty($uid)) {
@@ -232,5 +287,33 @@ class Chat extends Command
         $message = sprintf('uid:%d,message:%s', $uid, $message);
         $node->meshPublish($channel, sprintf('{"event":"subscribe","channel":"%s","data":"%s"}', $channel, $message));
         $node->meshSend($clientID, '{"op":"sendbroadcast","success":true}');
+    }
+
+    /**
+     * @param int $clientID
+     * @return void
+     */
+    protected function connect(int $clientID): void
+    {
+        // 使用 redis incr 增加在线人数
+        // ...
+    }
+
+    /**
+     * @param int $clientID
+     * @param int $uid
+     * @return void
+     */
+    protected function close(int $clientID, int $uid): void
+    {
+        // 关闭用户在线状态
+        if (!empty($uid)) {
+            \App\Models\User::query()->where('id', '=', $uid)->update([
+                'online' => 0,
+            ]);
+        }
+
+        // 使用 redis decr 减少在线人数
+        // ...
     }
 }
