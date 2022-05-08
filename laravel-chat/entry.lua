@@ -13,16 +13,6 @@ function init()
 end
 
 function on_connect(conn)
-    local s, err = mix.json_encode({ event = "connect" })
-    if err then
-       mix_log(mix_DEBUG, "json_encode error: " .. err)
-       return
-    end
-    local n, err = mix.queue.push(queue_conn, s)
-    if err then
-       mix_log(mix_DEBUG, "queue push error: " .. err)
-       return
-    end
 end
 
 function on_close(err, conn)
@@ -39,10 +29,24 @@ function on_close(err, conn)
     end
 end
 
+function on_handshake(headers, conn)
+    --print(headers)
+    local s, err = mix.json_encode({ event = "handshake", headers = headers })
+    if err then
+       mix_log(mix_DEBUG, "json_encode error: " .. err)
+       return
+    end
+    local n, err = mix.queue.push(queue_conn, s)
+    if err then
+       mix_log(mix_DEBUG, "queue push error: " .. err)
+       return
+    end
+end
+
 --buf为一个对象，是一个副本
 --返回值必须为int, 返回包截止的长度 0=继续等待,-1=断开连接
 function protocol_input(buf, conn)
-    return websocket.input(buf, conn, "/chat")
+    return websocket.input(buf, conn, "/chat", on_handshake)
 end
 
 --返回值支持任意类型, 当返回数据为nil时，on_message将不会被触发
@@ -62,18 +66,18 @@ function on_message(data, conn)
         return
     end
 
-    local tb, err = mix.json_decode(data["data"])
+    local msg, err = mix.json_decode(data["data"])
     if err then
        mix_log(mix_DEBUG, "json_decode error: " .. err)
        return
     end
 
     local ctx = conn:context()
-    local data = { frame = data, uid = ctx[auth_key] }
-    if tb["op"] == auth_op then
-        data["headers"] = ctx["headers"]
+    local tb = { frame = data, uid = ctx[auth_key] }
+    if msg["op"] == auth_op then
+        tb["headers"] = ctx["headers"]
     end
-    local s, err = mix.json_encode(data)
+    local s, err = mix.json_encode(tb)
     if err then
        mix_log(mix_DEBUG, "json_encode error: " .. err)
        return
@@ -84,7 +88,7 @@ function on_message(data, conn)
        return
     end
 
-    if tb["op"] == auth_op then
+    if msg["op"] == auth_op then
        conn:wait_context_value(auth_key)
     end
 end

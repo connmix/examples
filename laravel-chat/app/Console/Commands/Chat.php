@@ -136,11 +136,12 @@ class Chat extends Command
         // 解析
         $event = $data['event'] ?? '';
         $uid = $data['uid'] ?? 0;
+        $headers = $data['headers'] ?? [];
 
         // 业务逻辑
         switch ($event) {
-            case 'connect':
-                $this->connect($clientID);
+            case 'handshake':
+                $this->handshake($clientID, $headers);
                 break;
             case 'close':
                 $this->close($clientID, $uid);
@@ -293,9 +294,10 @@ class Chat extends Command
 
     /**
      * @param int $clientID
+     * @param array $headers
      * @return void
      */
-    protected function connect(int $clientID): void
+    protected function handshake(int $clientID, array $headers): void
     {
         // 使用 redis incr 增加在线人数
         // ...
