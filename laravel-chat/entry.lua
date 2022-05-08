@@ -17,12 +17,7 @@ end
 
 function on_close(err, conn)
     --print(err)
-    local s, err = mix.json_encode({ event = "close", uid = conn:context()[auth_key] })
-    if err then
-       mix_log(mix_DEBUG, "json_encode error: " .. err)
-       return
-    end
-    local n, err = mix.queue.push(queue_conn, s)
+    local n, err = mix.queue.push(queue_conn, { event = "close", uid = conn:context()[auth_key] })
     if err then
        mix_log(mix_DEBUG, "queue push error: " .. err)
        return
@@ -31,12 +26,7 @@ end
 
 function on_handshake(headers, conn)
     --print(headers)
-    local s, err = mix.json_encode({ event = "handshake", headers = headers })
-    if err then
-       mix_log(mix_DEBUG, "json_encode error: " .. err)
-       return
-    end
-    local n, err = mix.queue.push(queue_conn, s)
+    local n, err = mix.queue.push(queue_conn, { event = "handshake", headers = headers })
     if err then
        mix_log(mix_DEBUG, "queue push error: " .. err)
        return
@@ -77,12 +67,7 @@ function on_message(data, conn)
     if msg["op"] == auth_op then
         tb["headers"] = ctx["headers"]
     end
-    local s, err = mix.json_encode(tb)
-    if err then
-       mix_log(mix_DEBUG, "json_encode error: " .. err)
-       return
-    end
-    local n, err = mix.queue.push(queue_chat, s)
+    local n, err = mix.queue.push(queue_chat, tb)
     if err then
        mix_log(mix_DEBUG, "queue push error: " .. err)
        return
