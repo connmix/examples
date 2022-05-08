@@ -97,26 +97,21 @@ function init()
 end
 
 function on_connect(conn)
-    local s, err = mix.json_encode({ event = "connect" })
-    if err then
-       mix_log(mix_DEBUG, "json_encode error: " .. err)
-       return
-    end
-    local n, err = mix.queue.push(queue_conn, s)
+    --print(conn:client_id())
+end
+
+function on_close(err, conn)
+    --print(err)
+    local n, err = mix.queue.push(queue_conn, { event = "close", uid = conn:context()[auth_key] })
     if err then
        mix_log(mix_DEBUG, "queue push error: " .. err)
        return
     end
 end
 
-function on_close(err, conn)
-    --print(err)
-    local s, err = mix.json_encode({ event = "close", uid = conn:context()[auth_key] })
-    if err then
-       mix_log(mix_DEBUG, "json_encode error: " .. err)
-       return
-    end
-    local n, err = mix.queue.push(queue_conn, s)
+function on_handshake(headers, conn)
+    --print(headers)
+    local n, err = mix.queue.push(queue_conn, { event = "handshake", headers = headers })
     if err then
        mix_log(mix_DEBUG, "queue push error: " .. err)
        return
@@ -126,7 +121,7 @@ end
 --buf为一个对象，是一个副本
 --返回值必须为int, 返回包截止的长度 0=继续等待,-1=断开连接
 function protocol_input(buf, conn)
-    return websocket.input(buf, conn, "/chat")
+    return websocket.input(buf, conn, "/chat", on_handshake)
 end
 
 --返回值支持任意类型, 当返回数据为nil时，on_message将不会被触发
@@ -146,29 +141,24 @@ function on_message(data, conn)
         return
     end
 
-    local tb, err = mix.json_decode(data["data"])
+    local msg, err = mix.json_decode(data["data"])
     if err then
        mix_log(mix_DEBUG, "json_decode error: " .. err)
        return
     end
 
     local ctx = conn:context()
-    local data = { frame = data, uid = ctx[auth_key] }
-    if tb["op"] == auth_op then
-        data["headers"] = ctx["headers"]
+    local tb = { frame = data, uid = ctx[auth_key] }
+    if msg["op"] == auth_op then
+        tb["headers"] = ctx["headers"]
     end
-    local s, err = mix.json_encode(data)
-    if err then
-       mix_log(mix_DEBUG, "json_encode error: " .. err)
-       return
-    end
-    local n, err = mix.queue.push(queue_chat, s)
+    local n, err = mix.queue.push(queue_chat, tb)
     if err then
        mix_log(mix_DEBUG, "queue push error: " .. err)
        return
     end
 
-    if tb["op"] == auth_op then
+    if msg["op"] == auth_op then
        conn:wait_context_value(auth_key)
     end
 end
@@ -325,11 +315,12 @@ class Chat extends Command
         // 解析
         $event = $data['event'] ?? '';
         $uid = $data['uid'] ?? 0;
+        $headers = $data['headers'] ?? [];
 
         // 业务逻辑
         switch ($event) {
-            case 'connect':
-                $this->connect($clientID);
+            case 'handshake':
+                $this->handshake($clientID, $headers);
                 break;
             case 'close':
                 $this->close($clientID, $uid);
@@ -482,9 +473,10 @@ class Chat extends Command
 
     /**
      * @param int $clientID
+     * @param array $headers
      * @return void
      */
-    protected function connect(int $clientID): void
+    protected function handshake(int $clientID, array $headers): void
     {
         // 使用 redis incr 增加在线人数
         // ...

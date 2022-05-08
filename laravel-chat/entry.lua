@@ -13,6 +13,7 @@ function init()
 end
 
 function on_connect(conn)
+    --print(conn:client_id())
 end
 
 function on_close(err, conn)
