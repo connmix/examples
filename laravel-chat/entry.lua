@@ -1,6 +1,6 @@
 require("prettyprint")
 local mix_log = mix.log
-local mix_DEBUG = mix.DEBUG
+local mix_ERROR = mix.ERROR
 local websocket = require("protocols/websocket")
 local queue_chat = "chat"
 local queue_conn = "conn"
@@ -20,7 +20,8 @@ function on_close(err, conn)
     --print(err)
     local n, err = mix.queue.push(queue_conn, { event = "close", uid = conn:context()[auth_key] })
     if err then
-       mix_log(mix_DEBUG, "queue push error: " .. err)
+       mix_log(mix_ERROR, "queue push error: " .. err)
+       conn:close()
        return
     end
 end
@@ -29,7 +30,8 @@ function on_handshake(headers, conn)
     --print(headers)
     local n, err = mix.queue.push(queue_conn, { event = "handshake", headers = headers })
     if err then
-       mix_log(mix_DEBUG, "queue push error: " .. err)
+       mix_log(mix_ERROR, "queue push error: " .. err)
+       conn:close()
        return
     end
 end
@@ -59,7 +61,7 @@ function on_message(data, conn)
 
     local msg, err = mix.json_decode(data["data"])
     if err then
-       mix_log(mix_DEBUG, "json_decode error: " .. err)
+       mix_log(mix_ERROR, "json_decode error: " .. err)
        return
     end
 
@@ -70,7 +72,8 @@ function on_message(data, conn)
     end
     local n, err = mix.queue.push(queue_chat, tb)
     if err then
-       mix_log(mix_DEBUG, "queue push error: " .. err)
+       mix_log(mix_ERROR, "queue push error: " .. err)
+       conn:close()
        return
     end
 
