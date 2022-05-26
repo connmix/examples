@@ -2,17 +2,19 @@
 
 namespace App\Console\Commands;
 
+use Connmix\Client;
 use Connmix\MessageInterface;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Redis;
 
-class Chat extends Command
+class ChatRds extends Command
 {
     /**
      * The name and signature of the console command.
      *
      * @var string
      */
-    protected $signature = 'command:chat';
+    protected $signature = 'command:chat:rds';
 
     /**
      * The console command description.
@@ -31,65 +33,55 @@ class Chat extends Command
         $client = \Connmix\ClientBuilder::create()
             ->setHost('127.0.0.1:6787')
             ->build();
-        $onConnect = function (\Connmix\AsyncNodeInterface $node) {
-            // 消费内存队列
-            $node->consume('chat', 'conn');
-        };
-        $onMessage = function (\Connmix\AsyncNodeInterface $node) {
-            $message = $node->message();
-            switch ($message->type()) {
-                case "consume":
-                    $this->handleConsume($message, $node);
-                    break;
-                case "result":
-                    $success = $message->success();
-                    $fail = $message->fail();
-                    $total = $message->total();
-                    break;
-                case "error":
-                    $error = $message->error();
-                    break;
-                default:
-                    $payload = $message->payload();
+        while (true) {
+            // 修改.env增加REDIS_PREFIX为空
+            $result = Redis::connection()->command('brpop', ['chat', 10]);
+            if (!$result) {
+                continue;
             }
-        };
-        $onError = function (\Throwable $e) {
-            // handle error
-            print 'ERROR: ' . $e->getMessage() . PHP_EOL;
-        };
-        $client->on($onConnect, $onMessage, $onError);
-        $client->run();
-        return 0;
+
+            try {
+                $message = $client->parse($result[1]);
+//                var_dump($message->payload());
+                $this->handleEvent($message, $client);
+            } catch (\Throwable $e) {
+                print 'ERROR: ' . $e->getMessage() . PHP_EOL;
+            }
+        }
     }
 
     /**
      * @param MessageInterface $message
-     * @param \Connmix\AsyncNodeInterface $node
+     * @param Client $client
      * @return void
      */
-    protected function handleConsume(MessageInterface $message, \Connmix\AsyncNodeInterface $node): void
+    protected function handleEvent(MessageInterface $message, Client $client): void
     {
-        switch ($message->queue()) {
-            case 'chat':
-                $this->handleQueueChat($message, $node);
+        $event = $message->data()['event'] ?? '';
+        switch ($event) {
+            case 'close':
+            case 'handshake':
+                $this->handleQueueConn($message, $client);
                 break;
-            case 'conn':
-                $this->handleQueueConn($message, $node);
+            case 'message':
+                $this->handleQueueChat($message, $client);
                 break;
         }
     }
 
     /**
      * @param MessageInterface $message
-     * @param \Connmix\AsyncNodeInterface $node
+     * @param Client $client
      * @return void
      */
-    protected function handleQueueChat(MessageInterface $message, \Connmix\AsyncNodeInterface $node): void
+    protected function handleQueueChat(MessageInterface $message, Client $client): void
     {
+        $nodeID = $message->nodeID();
         $clientID = $message->clientID();
         $data = $message->data();
         $uid = $data['uid'] ?? 0;
         $headers = $data['headers'] ?? [];
+        $node = $client->node($nodeID);
 
         // 解析
         $json = json_decode($data['frame']['data'], true);
@@ -102,6 +94,9 @@ class Chat extends Command
 
         // 业务逻辑
         switch ($op) {
+            case 'ping':
+                $this->ping($node, $clientID);
+                break;
             case 'auth':
                 $this->auth($node, $clientID, $args, $headers);
                 break;
@@ -125,10 +120,10 @@ class Chat extends Command
 
     /**
      * @param MessageInterface $message
-     * @param \Connmix\AsyncNodeInterface $node
+     * @param Client $client
      * @return void
      */
-    protected function handleQueueConn(MessageInterface $message, \Connmix\AsyncNodeInterface $node): void
+    protected function handleQueueConn(MessageInterface $message, Client $client): void
     {
         $clientID = $message->clientID();
         $data = $message->data();
@@ -150,13 +145,23 @@ class Chat extends Command
     }
 
     /**
-     * @param \Connmix\AsyncNodeInterface $node
+     * @param \Connmix\SyncNodeInterface $node
+     * @param int $clientID
+     * @return void
+     */
+    protected function ping(\Connmix\SyncNodeInterface $node, int $clientID): void
+    {
+        $node->meshSend($clientID, '{"op":"pong","success":true}');
+    }
+
+    /**
+     * @param \Connmix\SyncNodeInterface $node
      * @param int $clientID
      * @param array $args
      * @param array $headers
      * @return void
      */
-    protected function auth(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, array $headers): void
+    protected function auth(\Connmix\SyncNodeInterface $node, int $clientID, array $args, array $headers): void
     {
         list($name, $password) = $args;
         $row = \App\Models\User::query()->where('name', '=', $name)->where('password', '=', $password)->first();
@@ -177,15 +182,14 @@ class Chat extends Command
         $node->meshSend($clientID, '{"op":"auth","success":true}');
     }
 
-
     /**
-     * @param \Connmix\AsyncNodeInterface $node
+     * @param \Connmix\SyncNodeInterface $node
      * @param int $clientID
      * @param array $args
      * @param int $uid
      * @return void
      */
-    protected function subscribe(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid): void
+    protected function subscribe(\Connmix\SyncNodeInterface $node, int $clientID, array $args, int $uid): void
     {
         // 登录判断
         if (empty($uid)) {
@@ -201,13 +205,13 @@ class Chat extends Command
     }
 
     /**
-     * @param \Connmix\AsyncNodeInterface $node
+     * @param \Connmix\SyncNodeInterface $node
      * @param int $clientID
      * @param array $args
      * @param int $uid
      * @return void
      */
-    protected function unsubscribe(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid): void
+    protected function unsubscribe(\Connmix\SyncNodeInterface $node, int $clientID, array $args, int $uid): void
     {
         // 登录判断
         if (empty($uid)) {
@@ -220,13 +224,13 @@ class Chat extends Command
     }
 
     /**
-     * @param \Connmix\AsyncNodeInterface $node
+     * @param \Connmix\SyncNodeInterface $node
      * @param int $clientID
      * @param array $args
      * @param int $uid
      * @return void
      */
-    protected function sendToRoom(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid): void
+    protected function sendToRoom(\Connmix\SyncNodeInterface $node, int $clientID, array $args, int $uid): void
     {
         // 登录判断
         if (empty($uid)) {
@@ -244,13 +248,13 @@ class Chat extends Command
     }
 
     /**
-     * @param \Connmix\AsyncNodeInterface $node
+     * @param \Connmix\SyncNodeInterface $node
      * @param int $clientID
      * @param array $args
      * @param int $uid
      * @return void
      */
-    protected function sendToUser(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid): void
+    protected function sendToUser(\Connmix\SyncNodeInterface $node, int $clientID, array $args, int $uid): void
     {
         // 登录判断
         if (empty($uid)) {
@@ -268,13 +272,13 @@ class Chat extends Command
     }
 
     /**
-     * @param \Connmix\AsyncNodeInterface $node
+     * @param \Connmix\SyncNodeInterface $node
      * @param int $clientID
      * @param array $args
      * @param int $uid
      * @return void
      */
-    protected function sendBroadcast(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid): void
+    protected function sendBroadcast(\Connmix\SyncNodeInterface $node, int $clientID, array $args, int $uid): void
     {
         // 登录判断
         if (empty($uid)) {

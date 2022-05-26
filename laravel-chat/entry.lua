@@ -2,15 +2,11 @@ require("prettyprint")
 local mix_log = mix.log
 local mix_ERROR = mix.ERROR
 local websocket = require("protocols/websocket")
-local queue_chat = "chat"
-local queue_conn = "conn"
+local mix_push = mix.queue.push
+--local mix_push = mix.redis.push
+local topic = "chat"
 local auth_op = "auth"
 local auth_key = "uid"
-
-function init()
-    mix.queue.new(queue_chat, 100)
-    mix.queue.new(queue_conn, 100)
-end
 
 function on_connect(conn)
     --print(conn:client_id())
@@ -18,9 +14,9 @@ end
 
 function on_close(err, conn)
     --print(err)
-    local n, err = mix.queue.push(queue_conn, { event = "close", uid = conn:context()[auth_key] })
+    local n, err = mix_push(topic, { event = "close", uid = conn:context()[auth_key] })
     if err then
-       mix_log(mix_ERROR, "queue push error: " .. err)
+       mix_log(mix_ERROR, "push error: " .. err)
        conn:close()
        return
     end
@@ -28,9 +24,9 @@ end
 
 function on_handshake(headers, conn)
     --print(headers)
-    local n, err = mix.queue.push(queue_conn, { event = "handshake", headers = headers })
+    local n, err = mix_push(topic, { event = "handshake", headers = headers })
     if err then
-       mix_log(mix_ERROR, "queue push error: " .. err)
+       mix_log(mix_ERROR, "push error: " .. err)
        conn:close()
        return
     end
@@ -66,13 +62,13 @@ function on_message(data, conn)
     end
 
     local ctx = conn:context()
-    local tb = { frame = data, uid = ctx[auth_key] }
+    local tb = { event = "message", uid = ctx[auth_key], frame = data }
     if msg["op"] == auth_op then
         tb["headers"] = ctx["headers"]
     end
-    local n, err = mix.queue.push(queue_chat, tb)
+    local n, err = mix_push(topic, tb)
     if err then
-       mix_log(mix_ERROR, "queue push error: " .. err)
+       mix_log(mix_ERROR, "push error: " .. err)
        conn:close()
        return
     end

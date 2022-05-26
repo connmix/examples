@@ -50,6 +50,8 @@ composer require connmix/connmix
 | 发送广播    | {"op":"sendbroadcast","args":["hello,world!"]}                     | 
 | 成功      | {"op":"***","success":true}                                        |
 | 错误      | {"op":"\*\*\*","error":"***"}                                      |
+| ping    | {"op":"ping"}                                                      |
+| pong    | {"op":"pong","success":true}                                       |
 
 ## 数据库设计
 
@@ -81,428 +83,27 @@ CREATE TABLE `users` (
 - `protocol_input` 修改绑定的 url 路径
 - `on_message` 增加阻塞等待上下文
 
-```lua
-require("prettyprint")
-local mix_log = mix.log
-local mix_ERROR = mix.ERROR
-local websocket = require("protocols/websocket")
-local queue_chat = "chat"
-local queue_conn = "conn"
-local auth_op = "auth"
-local auth_key = "uid"
-
-function init()
-    mix.queue.new(queue_chat, 100)
-    mix.queue.new(queue_conn, 100)
-end
-
-function on_connect(conn)
-    --print(conn:client_id())
-end
-
-function on_close(err, conn)
-    --print(err)
-    local n, err = mix.queue.push(queue_conn, { event = "close", uid = conn:context()[auth_key] })
-    if err then
-       mix_log(mix_ERROR, "queue push error: " .. err)
-       conn:close()
-       return
-    end
-end
-
-function on_handshake(headers, conn)
-    --print(headers)
-    local n, err = mix.queue.push(queue_conn, { event = "handshake", headers = headers })
-    if err then
-       mix_log(mix_ERROR, "queue push error: " .. err)
-       conn:close()
-       return
-    end
-end
-
---buf为一个对象，是一个副本
---返回值必须为int, 返回包截止的长度 0=继续等待,-1=断开连接
-function protocol_input(buf, conn)
-    return websocket.input(buf, conn, "/chat", on_handshake)
-end
-
---返回值支持任意类型, 当返回数据为nil时，on_message将不会被触发
-function protocol_decode(str, conn)
-    return websocket.decode(conn)
-end
-
---返回值必须为string, 当返回数据不是string, 或者为空, 发送消息时将返回失败错误
-function protocol_encode(str, conn)
-    return websocket.encode(str)
-end
-
---data为任意类型, 值等于protocol_decode返回值
-function on_message(data, conn)
-    --print(data)
-    if data["type"] ~= "text" then
-        return
-    end
-
-    local msg, err = mix.json_decode(data["data"])
-    if err then
-       mix_log(mix_ERROR, "json_decode error: " .. err)
-       return
-    end
-
-    local ctx = conn:context()
-    local tb = { frame = data, uid = ctx[auth_key] }
-    if msg["op"] == auth_op then
-        tb["headers"] = ctx["headers"]
-    end
-    local n, err = mix.queue.push(queue_chat, tb)
-    if err then
-       mix_log(mix_ERROR, "queue push error: " .. err)
-       conn:close()
-       return
-    end
-
-    if msg["op"] == auth_op then
-       conn:wait_context_value(auth_key)
-    end
-end
-```
-
 ## 编写业务逻辑
 
 然后我们在 `console` 编写代码，生成一个命令行 `class`
 
 ```
-php artisan make:command Chat
+php artisan make:command ChatMem
 ```
 
-- 文件路径：[Console/Commands/Chat.php](app/Console/Commands/Chat.php)
+- 内存队列：[ChatMem.php](app/Console/Commands/ChatMem.php)
 
-我们使用 `connmix-php` 客户端来处理内存队列的消费。
+```
+% php artisan command:chat:mem
+```
 
-```php
-<?php
+- Redis队列：[ChatRds.php](app/Console/Commands/ChatRds.php) 
+  - 修改 entry.lua 为 `mix.redis.push`
+  - 完善 connmix.yaml 的 redis 信息
+  - 完善 .env 的 redis 信息
 
-namespace App\Console\Commands;
-
-use Connmix\MessageInterface;
-use Illuminate\Console\Command;
-
-class Chat extends Command
-{
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
-    protected $signature = 'command:chat';
-
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
-    protected $description = 'Command description';
-
-    /**
-     * Execute the console command.
-     *
-     * @return int
-     */
-    public function handle()
-    {
-        $client = \Connmix\ClientBuilder::create()
-            ->setHost('127.0.0.1:6787')
-            ->build();
-        $onConnect = function (\Connmix\AsyncNodeInterface $node) {
-            // 消费内存队列
-            $node->consume('chat', 'conn');
-        };
-        $onMessage = function (\Connmix\AsyncNodeInterface $node) {
-            $message = $node->message();
-            switch ($message->type()) {
-                case "consume":
-                    $this->handleConsume($message, $node);
-                    break;
-                case "result":
-                    $success = $message->success();
-                    $fail = $message->fail();
-                    $total = $message->total();
-                    break;
-                case "error":
-                    $error = $message->error();
-                    break;
-                default:
-                    $payload = $message->payload();
-            }
-        };
-        $onError = function (\Throwable $e) {
-            // handle error
-            print 'ERROR: ' . $e->getMessage() . PHP_EOL;
-        };
-        $client->on($onConnect, $onMessage, $onError);
-        $client->run();
-        return 0;
-    }
-
-    /**
-     * @param MessageInterface $message
-     * @param \Connmix\AsyncNodeInterface $node
-     * @return void
-     */
-    protected function handleConsume(MessageInterface $message, \Connmix\AsyncNodeInterface $node): void
-    {
-        switch ($message->queue()) {
-            case 'chat':
-                $this->handleQueueChat($message, $node);
-                break;
-            case 'conn':
-                $this->handleQueueConn($message, $node);
-                break;
-        }
-    }
-
-    /**
-     * @param MessageInterface $message
-     * @param \Connmix\AsyncNodeInterface $node
-     * @return void
-     */
-    protected function handleQueueChat(MessageInterface $message, \Connmix\AsyncNodeInterface $node): void
-    {
-        $clientID = $message->clientID();
-        $data = $message->data();
-        $uid = $data['uid'] ?? 0;
-        $headers = $data['headers'] ?? [];
-
-        // 解析
-        $json = json_decode($data['frame']['data'], true);
-        if (empty($json)) {
-            $node->meshSend($clientID, '{"error":"Json format error"}');
-            return;
-        }
-        $op = $json['op'] ?? '';
-        $args = $json['args'] ?? [];
-
-        // 业务逻辑
-        switch ($op) {
-            case 'auth':
-                $this->auth($node, $clientID, $args, $headers);
-                break;
-            case 'subscribe':
-                $this->subscribe($node, $clientID, $args, $uid);
-                break;
-            case 'unsubscribe':
-                $this->unsubscribe($node, $clientID, $args, $uid);
-                break;
-            case 'sendtoroom':
-                $this->sendToRoom($node, $clientID, $args, $uid);
-                break;
-            case 'sendtouser':
-                $this->sendToUser($node, $clientID, $args, $uid);
-                break;
-            case 'sendbroadcast':
-                $this->sendBroadcast($node, $clientID, $args, $uid);
-                break;
-        }
-    }
-
-    /**
-     * @param MessageInterface $message
-     * @param \Connmix\AsyncNodeInterface $node
-     * @return void
-     */
-    protected function handleQueueConn(MessageInterface $message, \Connmix\AsyncNodeInterface $node): void
-    {
-        $clientID = $message->clientID();
-        $data = $message->data();
-
-        // 解析
-        $event = $data['event'] ?? '';
-        $uid = $data['uid'] ?? 0;
-        $headers = $data['headers'] ?? [];
-
-        // 业务逻辑
-        switch ($event) {
-            case 'handshake':
-                $this->handshake($clientID, $headers);
-                break;
-            case 'close':
-                $this->close($clientID, $uid);
-                break;
-        }
-    }
-
-    /**
-     * @param \Connmix\AsyncNodeInterface $node
-     * @param int $clientID
-     * @param array $args
-     * @param array $headers
-     * @return void
-     */
-    protected function auth(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, array $headers): void
-    {
-        list($name, $password) = $args;
-        $row = \App\Models\User::query()->where('name', '=', $name)->where('password', '=', $password)->first();
-        if (empty($row)) {
-            // 验证失败，设置一个特殊值解除 lua 代码阻塞
-            $node->setContextValue($clientID, 'user_id', 0);
-            $node->meshSend($clientID, '{"op":"auth","error":"Invalid name or password"}');
-            return;
-        }
-
-        // 开启用户在线状态
-        \App\Models\User::query()->where('id', '=', $row['id'])->update([
-            'online' => 1,
-        ]);
-
-        // 设置上下文解除 lua 代码阻塞
-        $node->setContextValue($clientID, 'uid', $row['id']);
-        $node->meshSend($clientID, '{"op":"auth","success":true}');
-    }
-
-
-    /**
-     * @param \Connmix\AsyncNodeInterface $node
-     * @param int $clientID
-     * @param array $args
-     * @param int $uid
-     * @return void
-     */
-    protected function subscribe(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid): void
-    {
-        // 登录判断
-        if (empty($uid)) {
-            $node->meshSend($clientID, '{"op":"subscribe","error":"No access"}');
-            return;
-        }
-
-        // 此处省略业务权限效验
-        // ...
-
-        $node->subscribe($clientID, ...$args);
-        $node->meshSend($clientID, '{"op":"subscribe","success":true}');
-    }
-
-    /**
-     * @param \Connmix\AsyncNodeInterface $node
-     * @param int $clientID
-     * @param array $args
-     * @param int $uid
-     * @return void
-     */
-    protected function unsubscribe(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid): void
-    {
-        // 登录判断
-        if (empty($uid)) {
-            $node->meshSend($clientID, '{"op":"unsubscribe","error":"No access"}');
-            return;
-        }
-
-        $node->unsubscribe($clientID, ...$args);
-        $node->meshSend($clientID, '{"op":"unsubscribe","success":true}');
-    }
-
-    /**
-     * @param \Connmix\AsyncNodeInterface $node
-     * @param int $clientID
-     * @param array $args
-     * @param int $uid
-     * @return void
-     */
-    protected function sendToRoom(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid): void
-    {
-        // 登录判断
-        if (empty($uid)) {
-            $node->meshSend($clientID, '{"op":"sendtoroom","error":"No access"}');
-            return;
-        }
-
-        // 此处省略业务权限效验
-        // ...
-
-        list($channel, $message) = $args;
-        $message = sprintf('uid:%d,message:%s', $uid, $message);
-        $node->meshPublish($channel, sprintf('{"event":"subscribe","channel":"%s","data":"%s"}', $channel, $message));
-        $node->meshSend($clientID, '{"op":"sendtoroom","success":true}');
-    }
-
-    /**
-     * @param \Connmix\AsyncNodeInterface $node
-     * @param int $clientID
-     * @param array $args
-     * @param int $uid
-     * @return void
-     */
-    protected function sendToUser(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid): void
-    {
-        // 登录判断
-        if (empty($uid)) {
-            $node->meshSend($clientID, '{"op":"sendtouser","error":"No access"}');
-            return;
-        }
-
-        // 此处省略业务权限效验
-        // ...
-
-        list($channel, $message) = $args;
-        $message = sprintf('uid:%d,message:%s', $uid, $message);
-        $node->meshPublish($channel, sprintf('{"event":"subscribe","channel":"%s","data":"%s"}', $channel, $message));
-        $node->meshSend($clientID, '{"op":"sendtouser","success":true}');
-    }
-
-    /**
-     * @param \Connmix\AsyncNodeInterface $node
-     * @param int $clientID
-     * @param array $args
-     * @param int $uid
-     * @return void
-     */
-    protected function sendBroadcast(\Connmix\AsyncNodeInterface $node, int $clientID, array $args, int $uid): void
-    {
-        // 登录判断
-        if (empty($uid)) {
-            $node->meshSend($clientID, '{"op":"sendbroadcast","error":"No access"}');
-            return;
-        }
-
-        // 此处省略业务权限效验
-        // ...
-
-        $channel = 'broadcast';
-        list($message) = $args;
-        $message = sprintf('uid:%d,message:%s', $uid, $message);
-        $node->meshPublish($channel, sprintf('{"event":"subscribe","channel":"%s","data":"%s"}', $channel, $message));
-        $node->meshSend($clientID, '{"op":"sendbroadcast","success":true}');
-    }
-
-    /**
-     * @param int $clientID
-     * @param array $headers
-     * @return void
-     */
-    protected function handshake(int $clientID, array $headers): void
-    {
-        // 使用 redis incr 增加在线人数
-        // ...
-    }
-
-    /**
-     * @param int $clientID
-     * @param int $uid
-     * @return void
-     */
-    protected function close(int $clientID, int $uid): void
-    {
-        // 关闭用户在线状态
-        if (!empty($uid)) {
-            \App\Models\User::query()->where('id', '=', $uid)->update([
-                'online' => 0,
-            ]);
-        }
-
-        // 使用 redis decr 减少在线人数
-        // ...
-    }
-}
+```
+% php artisan command:chat:rds
 ```
 
 ## 调试
@@ -515,10 +116,12 @@ class Chat extends Command
 % bin/connmix dev -f conf/connmix.yaml 
 ```
 
-- 启动 `Laravel` 命令行 (可以启动多个来增加性能)
+- 启动 `Laravel` 命令行
+
+可以启动多个来增加性能，并不是越多越好，和 connmix cpus 核数量差不多即可
 
 ```
-% php artisan command:chat
+% php artisan command:chat:mem
 ```
 
 ### WebSocket Client 1
