@@ -33,7 +33,7 @@ class ChatMem extends Command
             ->build();
         $onConnect = function (\Connmix\AsyncNodeInterface $node) {
             // 消费内存队列
-            $node->consume('chat');
+            $node->pop('chat');
         };
         $onMessage = function (\Connmix\AsyncNodeInterface $node) {
             $message = $node->message();
