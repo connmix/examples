@@ -118,7 +118,7 @@ php artisan make:command ChatMem
 
 - 启动 `Laravel` 命令行
 
-可以启动多个来增加性能，并不是越多越好，和 connmix cpus 核数量差不多即可
+可以启动多个来增加性能，并不是越多越好，和 connmix engine cpus 数量差不多即可
 
 ```
 % php artisan command:chat:mem
