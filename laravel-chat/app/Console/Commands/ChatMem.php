@@ -37,7 +37,6 @@ class ChatMem extends Command
         };
         $onMessage = function (\Connmix\AsyncNodeInterface $node) {
             $message = $node->message();
-//            var_dump($message->payload());
             switch ($message->type()) {
                 case "event":
                     $this->handleEvent($message, $node);

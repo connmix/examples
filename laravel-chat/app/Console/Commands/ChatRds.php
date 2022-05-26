@@ -42,7 +42,6 @@ class ChatRds extends Command
 
             try {
                 $message = $client->parse($result[1]);
-//                var_dump($message->payload());
                 $this->handleEvent($message, $client);
             } catch (\Throwable $e) {
                 print 'ERROR: ' . $e->getMessage() . PHP_EOL;
