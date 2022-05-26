@@ -150,7 +150,7 @@ class ChatRds extends Command
      */
     protected function ping(\Connmix\SyncNodeInterface $node, int $clientID): void
     {
-        $node->meshSend($clientID, '{"op":"pong","success":true}');
+        $node->meshSend($clientID, '{"op":"pong"');
     }
 
     /**

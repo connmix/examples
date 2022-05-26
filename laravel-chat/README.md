@@ -51,7 +51,7 @@ composer require connmix/connmix
 | 成功      | {"op":"***","success":true}                                        |
 | 错误      | {"op":"\*\*\*","error":"***"}                                      |
 | ping    | {"op":"ping"}                                                      |
-| pong    | {"op":"pong","success":true}                                       |
+| pong    | {"op":"pong"}                                                      |
 
 ## 数据库设计
 

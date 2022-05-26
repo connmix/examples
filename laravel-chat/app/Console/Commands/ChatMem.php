@@ -161,7 +161,7 @@ class ChatMem extends Command
      */
     protected function ping(\Connmix\AsyncNodeInterface $node, int $clientID): void
     {
-        $node->meshSend($clientID, '{"op":"pong","success":true}');
+        $node->meshSend($clientID, '{"op":"pong"}');
     }
 
     /**
