@@ -50,8 +50,8 @@ composer require connmix/connmix
 | 发送广播    | {"op":"sendbroadcast","args":["hello,world!"]}                     | 
 | 成功      | {"op":"***","success":true}                                        |
 | 错误      | {"op":"\*\*\*","error":"***"}                                      |
-| ping    | {"op":"ping"}                                                      |
-| pong    | {"op":"pong"}                                                      |
+| Ping    | {"op":"ping"}                                                      |
+| Pong    | {"op":"pong"}                                                      |
 
 ## 数据库设计
 
