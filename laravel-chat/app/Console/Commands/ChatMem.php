@@ -177,7 +177,7 @@ class ChatMem extends Command
         $row = \App\Models\User::query()->where('name', '=', $name)->where('password', '=', $password)->first();
         if (empty($row)) {
             // 验证失败，设置一个特殊值解除 lua 代码阻塞
-            $node->setContextValue($clientID, 'user_id', 0);
+            $node->setContextValue($clientID, 'uid', 0);
             $node->meshSend($clientID, '{"op":"auth","error":"Invalid name or password"}');
             return;
         }
